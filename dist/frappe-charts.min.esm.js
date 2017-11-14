@@ -402,6 +402,46 @@ $.fire = function (target, type, properties) {
 	return target.dispatchEvent(evt);
 };
 
+function limit_color(r) {
+	if (r > 255) return 255;else if (r < 0) return 0;
+	return r;
+}
+
+function lighten_darken_color(color, amt) {
+	var col = get_color(color);
+	var usePound = false;
+	if (col[0] == "#") {
+		col = col.slice(1);
+		usePound = true;
+	}
+	var num = parseInt(col, 16);
+	var r = limit_color((num >> 16) + amt);
+	var b = limit_color((num >> 8 & 0x00FF) + amt);
+	var g = limit_color((num & 0x0000FF) + amt);
+	return (usePound ? "#" : "") + (g | b << 8 | r << 16).toString(16);
+}
+
+var color_map = {
+	'light-blue': '#7cd6fd',
+	blue: '#5e64ff',
+	violet: '#743ee2',
+	red: '#ff5858',
+	orange: '#ffa00a',
+	yellow: '#feef72',
+	green: '#28a745',
+	'light-green': '#98d85b',
+	purple: '#b554ff',
+	magenta: '#ffa3ef',
+	black: '#36114C',
+	grey: '#bdd3e6',
+	'light-grey': '#f0f4f7',
+	'dark-grey': '#b8c2cc'
+};
+
+var get_color = function get_color(color) {
+	return color_map[color] || color;
+};
+
 var UnitRenderer = function () {
 	var UnitRenderer = function UnitRenderer(total_height, zero_line, avg_unit_width) {
 		this.total_height = total_height;
@@ -448,7 +488,8 @@ var UnitRenderer = function () {
 			    y = _get_bar_height_and_y2[1];
 
 			return $.createSVG('rect', {
-				className: 'bar mini fill ' + color,
+				className: 'bar mini',
+				style: 'fill: ' + get_color(color),
 				'data-point-index': index,
 				x: current_x,
 				y: y,
@@ -459,7 +500,7 @@ var UnitRenderer = function () {
 
 		draw_dot: function draw_dot(x, y, args, color, index) {
 			return $.createSVG('circle', {
-				className: 'fill ' + color,
+				style: 'fill: ' + get_color(color),
 				'data-point-index': index,
 				cx: x,
 				cy: y,
@@ -908,8 +949,12 @@ var SvgTip = function () {
 			this.data_point_list.innerHTML = '';
 
 			this.list_values.map(function (set$$1) {
+				var color = set$$1.color ? get_color(set$$1.color) : 'black';
+
 				var li = $.create('li', {
-					className: 'border-top ' + (set$$1.color || 'black'),
+					styles: {
+						'border-top': '3px solid ' + color
+					},
 					innerHTML: '<strong style="display: block;">' + (set$$1.value === 0 || set$$1.value ? set$$1.value : '') + '</strong>\n\t\t\t\t\t' + (set$$1.title ? set$$1.title : '')
 				});
 
@@ -1017,7 +1062,9 @@ var BaseChart = function () {
 		this.has_legend = has_legend;
 
 		this.colors = colors;
-		if (!this.colors || this.data.labels && this.colors.length < this.data.labels.length) {
+		var list = type === 'percentage' || type === 'pie' ? this.data.labels : this.data.datasets;
+
+		if (!this.colors || list && this.colors.length < list.length) {
 			this.colors = ['light-blue', 'blue', 'violet', 'red', 'orange', 'yellow', 'green', 'light-green', 'purple', 'magenta'];
 		}
 
@@ -1056,7 +1103,8 @@ var BaseChart = function () {
 				title: this.title,
 				data: this.raw_chart_args.data,
 				type: type,
-				height: this.raw_chart_args.height
+				height: this.raw_chart_args.height,
+				colors: this.colors
 			});
 		}
 	}, {
@@ -1198,7 +1246,10 @@ var BaseChart = function () {
 			this.summary.map(function (d) {
 				var stats = $.create('div', {
 					className: 'stats',
-					innerHTML: '<span class="indicator ' + d.color + '">' + d.title + ': ' + d.value + '</span>'
+					styles: {
+						background: d.color
+					},
+					innerHTML: '<span class="indicator">' + d.title + ': ' + d.value + '</span>'
 				});
 				_this2.stats_wrapper.appendChild(stats);
 			});
@@ -2200,7 +2251,6 @@ var BarChart = function (_AxisChart) {
 			if (this.overlay) {
 				this.overlay.parentNode.removeChild(this.overlay);
 			}
-
 			this.overlay = unit.cloneNode();
 			this.overlay.style.fill = '#000000';
 			this.overlay.style.opacity = '0.4';
@@ -2243,6 +2293,9 @@ var BarChart = function (_AxisChart) {
 			}).map(function (attr) {
 				_this4.overlay.setAttribute(attr.name, attr.nodeValue);
 			});
+
+			this.overlay.style.fill = '#000000';
+			this.overlay.style.opacity = '0.4';
 		}
 	}, {
 		key: 'on_left_arrow',
@@ -2349,7 +2402,7 @@ var LineChart = function (_AxisChart) {
 
 			d.path = $.createSVG('path', {
 				inside: this.paths_groups[i],
-				className: 'stroke ' + color,
+				style: 'stroke: ' + get_color(color),
 				d: "M" + points_str
 			});
 
@@ -2394,8 +2447,8 @@ var LineChart = function (_AxisChart) {
 
 			var set_gradient_stop = function set_gradient_stop(grad_elem, offset, color, opacity) {
 				$.createSVG('stop', {
-					'className': 'stop-color ' + color,
-					'inside': grad_elem,
+					style: 'stop-color: ' + color,
+					inside: grad_elem,
 					'offset': offset,
 					'stop-opacity': opacity
 				});
@@ -2572,9 +2625,10 @@ var PercentageChart = function (_BaseChart) {
 			this.slices = [];
 			this.slice_totals.map(function (total, i) {
 				var slice = $.create('div', {
-					className: 'progress-bar background ' + _this3.colors[i],
+					className: 'progress-bar',
 					inside: _this3.percentage_bar,
 					styles: {
+						background: get_color(_this3.colors[i]),
 						width: total * 100 / _this3.grand_total + "%"
 					}
 				});
@@ -2613,31 +2667,13 @@ var PercentageChart = function (_BaseChart) {
 						className: 'stats',
 						inside: _this5.stats_wrapper
 					});
-					stats.innerHTML = '<span class="indicator ' + _this5.colors[i] + '">\n\t\t\t\t\t<span class="text-muted">' + x_values[i] + ':</span>\n\t\t\t\t\t' + d + '\n\t\t\t\t</span>';
+					stats.innerHTML = '<span class="indicator">\n\t\t\t\t\t<i style="background: ' + get_color(_this5.colors[i]) + '"></i>\n\t\t\t\t\t<span class="text-muted">' + x_values[i] + ':</span>\n\t\t\t\t\t' + d + '\n\t\t\t\t</span>';
 				}
 			});
 		}
 	}]);
 	return PercentageChart;
 }(BaseChart);
-
-function limit_color(r) {
-	if (r > 255) return 255;else if (r < 0) return 0;
-	return r;
-}
-
-function lighten_darken_color(col, amt) {
-	var usePound = false;
-	if (col[0] == "#") {
-		col = col.slice(1);
-		usePound = true;
-	}
-	var num = parseInt(col, 16);
-	var r = limit_color((num >> 16) + amt);
-	var b = limit_color((num >> 8 & 0x00FF) + amt);
-	var g = limit_color((num & 0x0000FF) + amt);
-	return (usePound ? "#" : "") + (g | b << 8 | r << 16).toString(16);
-}
 
 var ANGLE_RATIO = Math.PI / 180;
 var FULL_ANGLE = 360;
@@ -2662,9 +2698,6 @@ var PieChart = function (_BaseChart) {
 		_this.colors = args.colors;
 		_this.startAngle = args.startAngle || 0;
 		_this.clockWise = args.clockWise || false;
-		if (!_this.colors || _this.colors.length < _this.data.labels.length) {
-			_this.colors = ['#7cd6fd', '#5e64ff', '#743ee2', '#ff5858', '#ffa00a', '#FEEF72', '#28a745', '#98d85b', '#b554ff', '#ffa3ef'];
-		}
 		_this.mouseMove = _this.mouseMove.bind(_this);
 		_this.mouseLeave = _this.mouseLeave.bind(_this);
 		_this.setup();
@@ -2767,7 +2800,7 @@ var PieChart = function (_BaseChart) {
 					className: 'pie-path',
 					style: 'transition:transform .3s;',
 					d: curPath,
-					fill: _this3.colors[i]
+					fill: get_color(_this3.colors[i])
 				});
 				_this3.slices.push(slice);
 				_this3.slicesProperties.push({
@@ -2826,9 +2859,10 @@ var PieChart = function (_BaseChart) {
 		key: 'hoverSlice',
 		value: function hoverSlice(path, i, flag, e) {
 			if (!path) return;
+			var color = get_color(this.colors[i]);
 			if (flag) {
 				transform(path, this.calTranslateByAngle(this.slicesProperties[i]));
-				path.setAttribute('fill', lighten_darken_color(this.colors[i], 50));
+				path.setAttribute('fill', lighten_darken_color(color, 50));
 				var g_off = $.offset(this.svg);
 				var x = e.pageX - g_off.left + 10;
 				var y = e.pageY - g_off.top - 10;
@@ -2839,7 +2873,7 @@ var PieChart = function (_BaseChart) {
 			} else {
 				transform(path, 'translate3d(0,0,0)');
 				this.tip.hide_tip();
-				path.setAttribute('fill', this.colors[i]);
+				path.setAttribute('fill', color);
 			}
 		}
 	}, {
@@ -2876,12 +2910,14 @@ var PieChart = function (_BaseChart) {
 
 			var x_values = this.formatted_labels && this.formatted_labels.length > 0 ? this.formatted_labels : this.labels;
 			this.legend_totals.map(function (d, i) {
+				var color = get_color(_this5.colors[i]);
+
 				if (d) {
 					var stats = $.create('div', {
 						className: 'stats',
 						inside: _this5.stats_wrapper
 					});
-					stats.innerHTML = '<span class="indicator">\n\t\t\t\t\t<i style="background-color:' + _this5.colors[i] + ';"></i>\n\t\t\t\t\t<span class="text-muted">' + x_values[i] + ':</span>\n\t\t\t\t\t' + d + '\n\t\t\t\t</span>';
+					stats.innerHTML = '<span class="indicator">\n\t\t\t\t\t<i style="background-color:' + color + ';"></i>\n\t\t\t\t\t<span class="text-muted">' + x_values[i] + ':</span>\n\t\t\t\t\t' + d + '\n\t\t\t\t</span>';
 				}
 			});
 		}
