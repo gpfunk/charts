@@ -1467,7 +1467,7 @@ var AxisChart = function (_BaseChart) {
 			this.x.map(function (point, i) {
 				var space_taken = get_string_width(point, char_width) + 2;
 				if (space_taken > allowed_space) {
-					if (_this4.is_series) {
+					if (_this4.is_series && allowed_space > 0) {
 						// Skip some axis lines if X axis is a series
 						var skips = 1;
 						while (space_taken / skips * 2 > allowed_space) {
